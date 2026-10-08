@@ -1,28 +1,27 @@
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, Depends
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field
-from typing import List, Optional
-from datetime import datetime, timezone
-
-from data import RECIPES, MOODS, CATEGORIES
+from zoneinfo import ZoneInfo
+from pydantic import BaseModel
+from typing import Optional
+from datetime import datetime, timezone, timedelta, date
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+from sqlalchemy import text  # noqa: E402
+from db import SessionLocal, init_db, row_dict, engine  # noqa: E402
+from auth import optional_user, require_user  # noqa: E402
 
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
 INSIGHT_PROVIDER = os.environ.get('INSIGHT_MODEL_PROVIDER', 'gemini')
 INSIGHT_MODEL = os.environ.get('INSIGHT_MODEL_NAME', 'gemini-3-flash-preview')
 VISION_PROVIDER = os.environ.get('VISION_MODEL_PROVIDER', 'gemini')
 VISION_MODEL = os.environ.get('VISION_MODEL_NAME', 'gemini-3.1-pro-preview')
+APP_TZ = ZoneInfo(os.environ.get('APP_TIMEZONE', 'Asia/Jakarta'))
 
 app = FastAPI(title="NutriVane API")
 api_router = APIRouter(prefix="/api")
@@ -30,7 +29,10 @@ api_router = APIRouter(prefix="/api")
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("nutrivane")
 
-RECIPE_BY_SLUG = {r["slug"]: r for r in RECIPES}
+
+async def get_db():
+    async with SessionLocal() as s:
+        yield s
 
 
 # ----------------------------- Models -----------------------------
@@ -38,10 +40,6 @@ class ScanRequest(BaseModel):
     benchmark_slug: str
     measure: bool = False
     image_base64: Optional[str] = None
-
-
-class InsightRequest(BaseModel):
-    slug: str
 
 
 # ----------------------------- AI helpers -----------------------------
@@ -71,15 +69,15 @@ async def generate_insight_text(recipe: dict) -> str:
             f"Tulis 2 kalimat insight singkat soal profil rasanya."
         )
         resp = await chat.send_message(UserMessage(text=prompt))
-        text = (resp or "").strip()
-        return text or fallback
+        text_ = (resp or "").strip()
+        return text_ or fallback
     except Exception as e:
         logger.warning(f"insight AI failed, using fallback: {e}")
         return fallback
 
 
 async def analyze_food_image(image_base64: str) -> str:
-    """Stronger AI (vision model) only when the user actually uploads a photo."""
+    """Stronger AI (vision model) only when the user actually sends a photo."""
     if not EMERGENT_LLM_KEY:
         return "Analisis foto butuh koneksi AI. Untuk beta, pilih menu benchmark di bawah."
     try:
@@ -105,7 +103,10 @@ async def analyze_food_image(image_base64: str) -> str:
         return "Belum bisa menganalisis foto saat ini. Coba lagi atau pilih menu benchmark."
 
 
-# ----------------------------- Public data endpoints -----------------------------
+# ----------------------------- Data helpers -----------------------------
+RECIPE_COLS = "slug,name,category,category_label,porsi,image,tagline,flavor_note,spices,sources"
+
+
 def recipe_card(r: dict) -> dict:
     return {
         "slug": r["slug"], "name": r["name"], "category": r["category"],
@@ -114,155 +115,240 @@ def recipe_card(r: dict) -> dict:
     }
 
 
+def with_pct(spices: list) -> list:
+    max_avg = max(s["avg"] for s in spices) or 1
+    return [{**s, "pct": round(s["avg"] / max_avg * 100)} for s in spices]
+
+
+async def fetch_recipe(db, slug: str) -> dict:
+    row = (await db.execute(text(f"select {RECIPE_COLS} from recipes where slug=:slug"), {"slug": slug})).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Menu tidak ditemukan")
+    return row_dict(row)
+
+
+async def fetch_recipes(db, slugs: Optional[list] = None, category: Optional[str] = None, q: Optional[str] = None) -> list:
+    sql = f"select {RECIPE_COLS} from recipes where 1=1"
+    params = {}
+    if slugs is not None:
+        if not slugs:
+            return []
+        sql += " and slug = any(:slugs)"
+        params["slugs"] = slugs
+    if category and category != "semua":
+        sql += " and category=:category"
+        params["category"] = category
+    if q:
+        sql += " and (name ilike :q or tagline ilike :q)"
+        params["q"] = f"%{q}%"
+    sql += " order by sort_order"
+    return [row_dict(r) for r in (await db.execute(text(sql), params)).all()]
+
+
+async def get_or_create_insight(db, recipe: dict) -> tuple:
+    row = (await db.execute(text("select text from insights where slug=:slug"), {"slug": recipe["slug"]})).first()
+    if row and row[0]:
+        return row[0], True
+    text_ = await generate_insight_text(recipe)
+    await db.execute(text(
+        "insert into insights(slug,text,updated_at) values(:slug,:text,now()) "
+        "on conflict (slug) do update set text=excluded.text, updated_at=now()"
+    ), {"slug": recipe["slug"], "text": text_})
+    await db.commit()
+    return text_, False
+
+
+def compute_streak(days: list, today: date) -> int:
+    s = set(days)
+    cur = today if today in s else (today - timedelta(days=1) if (today - timedelta(days=1)) in s else None)
+    n = 0
+    while cur and cur in s:
+        n += 1
+        cur -= timedelta(days=1)
+    return n
+
+
+async def user_stats(db, user_id: Optional[str]) -> dict:
+    if not user_id:
+        return {"streak_days": 0, "plates_recognized": 0, "weekly_delta": 0}
+    rows = (await db.execute(text(
+        "select (created_at at time zone :tz)::date as d, count(*) as n from scans "
+        "where user_id=cast(:uid as uuid) group by d order by d desc"
+    ), {"uid": user_id, "tz": APP_TZ.key})).all()
+    today = datetime.now(APP_TZ).date()
+    plates = sum(r.n for r in rows)
+    weekly = sum(r.n for r in rows if r.d >= today - timedelta(days=6))
+    return {"streak_days": compute_streak([r.d for r in rows], today), "plates_recognized": plates, "weekly_delta": weekly}
+
+
+async def upsert_profile(db, user: dict):
+    await db.execute(text(
+        "insert into profiles(user_id,email,display_name,avatar_url,last_seen_at) "
+        "values(cast(:id as uuid),:email,:name,:avatar_url,now()) "
+        "on conflict (user_id) do update set email=excluded.email, display_name=excluded.display_name, "
+        "avatar_url=excluded.avatar_url, last_seen_at=now()"
+    ), user)
+    await db.commit()
+
+
+async def favorite_slugs(db, user_id: str) -> list:
+    rows = (await db.execute(text(
+        "select slug from favorites where user_id=cast(:uid as uuid) order by created_at desc"), {"uid": user_id})).all()
+    return [r[0] for r in rows]
+
+
+# ----------------------------- Endpoints -----------------------------
 @api_router.get("/")
 async def root():
     return {"app": "NutriVane", "status": "ok"}
 
 
+@api_router.get("/health")
+async def health(db=Depends(get_db)):
+    await db.execute(text("select 1"))
+    return {"ok": True}
+
+
 @api_router.get("/home")
-async def home():
-    now = datetime.now(timezone.utc)
+async def home(user=Depends(optional_user), db=Depends(get_db)):
+    now = datetime.now(APP_TZ)
     hour = now.hour
     part = "pagi" if hour < 11 else ("siang" if hour < 15 else ("sore" if hour < 19 else "malam"))
-    plates = await db.scans.count_documents({})
+    stats = await user_stats(db, user["id"] if user else None)
+    name = user["name"].split(" ")[0] if user else "teman"
+    moods = [row_dict(r) for r in (await db.execute(text("select key,label,emoji,subtitle from moods order by sort_order"))).all()]
+    picks = await fetch_recipes(db)
     return {
         "date": now.strftime("%Y-%m-%d"),
         "part_of_day": part,
-        "greeting_name": "Asha",
+        "authenticated": bool(user),
+        "greeting_name": name,
         "headline": "Makan lebih paham, mulai dari satu piring.",
-        "subhead": f"Selamat datang kembali, Asha. Yuk kenali isi piringmu {part} ini.",
-        "streak_days": 4,
-        "plates_recognized": 12 + plates,
-        "weekly_delta": 2,
+        "subhead": (f"Selamat datang kembali, {name}. Yuk kenali isi piringmu {part} ini."
+                    if user else f"Halo! Yuk kenali isi piringmu {part} ini. Masuk untuk menyimpan streak dan piringmu."),
+        **stats,
         "featured": {
             "badge": "Beta insight",
             "title": "Apa yang ada di balik rasa rendangmu?",
             "body": "Bandingkan bumbu dari banyak resep, lalu pilih dengan lebih yakin.",
             "slug": "rendang",
         },
-        "moods": [{"key": m["key"], "label": m["label"], "emoji": m["emoji"], "subtitle": m["subtitle"]} for m in MOODS],
-        "picks": [recipe_card(r) for r in RECIPES],
+        "moods": moods,
+        "picks": [recipe_card(r) for r in picks],
     }
 
 
 @api_router.get("/categories")
-async def categories():
-    return CATEGORIES
+async def categories(db=Depends(get_db)):
+    return [row_dict(r) for r in (await db.execute(text("select key,label from categories order by sort_order"))).all()]
 
 
 @api_router.get("/recipes")
-async def list_recipes(category: Optional[str] = None, q: Optional[str] = None):
-    items = RECIPES
-    if category and category != "semua":
-        items = [r for r in items if r["category"] == category]
-    if q:
-        ql = q.lower()
-        items = [r for r in items if ql in r["name"].lower() or ql in r["tagline"].lower()]
-    return [recipe_card(r) for r in items]
+async def list_recipes(category: Optional[str] = None, q: Optional[str] = None, db=Depends(get_db)):
+    return [recipe_card(r) for r in await fetch_recipes(db, category=category, q=q)]
 
 
 @api_router.get("/recipes/{slug}")
-async def recipe_detail(slug: str):
-    r = RECIPE_BY_SLUG.get(slug)
-    if not r:
-        raise HTTPException(status_code=404, detail="Menu tidak ditemukan")
-    max_avg = max(s["avg"] for s in r["spices"]) or 1
-    spices = [{**s, "pct": round(s["avg"] / max_avg * 100)} for s in r["spices"]]
-    return {
-        "slug": r["slug"], "name": r["name"], "category": r["category"],
-        "category_label": r["category_label"], "porsi": r["porsi"], "image": r["image"],
-        "tagline": r["tagline"], "flavor_note": r["flavor_note"],
-        "source_count": len(r["sources"]), "sources": r["sources"], "spices": spices,
-    }
+async def recipe_detail(slug: str, db=Depends(get_db)):
+    r = await fetch_recipe(db, slug)
+    return {**{k: r[k] for k in ("slug", "name", "category", "category_label", "porsi", "image", "tagline", "flavor_note")},
+            "source_count": len(r["sources"]), "sources": r["sources"], "spices": with_pct(r["spices"])}
 
 
 @api_router.get("/moods")
-async def list_moods():
-    return [{"key": m["key"], "label": m["label"], "emoji": m["emoji"],
-             "subtitle": m["subtitle"], "question": m["question"], "helper": m["helper"]} for m in MOODS]
+async def list_moods(db=Depends(get_db)):
+    return [row_dict(r) for r in (await db.execute(text(
+        "select key,label,emoji,subtitle,question,helper from moods order by sort_order"))).all()]
 
 
 @api_router.get("/moods/{key}")
-async def mood_detail(key: str):
-    m = next((x for x in MOODS if x["key"] == key), None)
-    if not m:
+async def mood_detail(key: str, db=Depends(get_db)):
+    row = (await db.execute(text(
+        "select key,label,emoji,question,helper,recipe_slugs from moods where key=:key"), {"key": key})).first()
+    if not row:
         raise HTTPException(status_code=404, detail="Mood tidak ditemukan")
-    recs = [recipe_card(RECIPE_BY_SLUG[s]) for s in m["recipe_slugs"] if s in RECIPE_BY_SLUG]
-    return {"key": m["key"], "label": m["label"], "emoji": m["emoji"], "question": m["question"],
-            "helper": m["helper"], "recipes": recs}
+    m = row_dict(row)
+    recs = await fetch_recipes(db, slugs=m.pop("recipe_slugs"))
+    return {**m, "recipes": [recipe_card(r) for r in recs]}
 
 
 @api_router.get("/insight/{slug}")
-async def get_insight(slug: str):
-    r = RECIPE_BY_SLUG.get(slug)
-    if not r:
-        raise HTTPException(status_code=404, detail="Menu tidak ditemukan")
-    cached = await db.insights.find_one({"slug": slug}, {"_id": 0})
-    if cached and cached.get("text"):
-        return {"slug": slug, "text": cached["text"], "cached": True}
-    text = await generate_insight_text(r)
-    await db.insights.update_one(
-        {"slug": slug},
-        {"$set": {"slug": slug, "text": text, "updated_at": datetime.now(timezone.utc).isoformat()}},
-        upsert=True,
-    )
-    return {"slug": slug, "text": text, "cached": False}
+async def get_insight(slug: str, db=Depends(get_db)):
+    r = await fetch_recipe(db, slug)
+    text_, cached = await get_or_create_insight(db, r)
+    return {"slug": slug, "text": text_, "cached": cached}
 
 
 @api_router.post("/scan")
-async def scan(req: ScanRequest):
-    r = RECIPE_BY_SLUG.get(req.benchmark_slug)
-    if not r:
+async def scan(req: ScanRequest, user=Depends(optional_user), db=Depends(get_db)):
+    row = (await db.execute(text(f"select {RECIPE_COLS} from recipes where slug=:slug"), {"slug": req.benchmark_slug})).first()
+    if not row:
         raise HTTPException(status_code=404, detail="Menu benchmark tidak ditemukan")
+    r = row_dict(row)
 
     result = {
-        "benchmark_slug": r["slug"],
-        "menu_name": r["name"],
-        "category_label": r["category_label"],
-        "image": r["image"],
-        "measure_enabled": req.measure,
-        "source_count": len(r["sources"]),
+        "benchmark_slug": r["slug"], "menu_name": r["name"], "category_label": r["category_label"],
+        "image": r["image"], "measure_enabled": req.measure, "source_count": len(r["sources"]),
+        "saved_to_account": bool(user),
     }
 
     # Vision AI only runs when a real photo is attached (balanced AI usage).
     if req.image_base64:
         result["vision_note"] = await analyze_food_image(req.image_base64)
     else:
-        result["vision_note"] = (
-            f"Mode beta: menggunakan benchmark {r['name']}. Arahkan kamera ke makananmu "
-            f"saat versi penuh tersedia."
-        )
+        result["vision_note"] = f"Mode beta: menggunakan benchmark {r['name']}. Ambil foto dari kamera untuk analisis AI."
 
     # Spice meter (pure computation — no AI) only when the measure toggle is on.
     if req.measure:
-        max_avg = max(s["avg"] for s in r["spices"]) or 1
-        result["spices"] = [{**s, "pct": round(s["avg"] / max_avg * 100)} for s in r["spices"]]
+        result["spices"] = with_pct(r["spices"])
 
-    # Short flavor insight (cost-efficient standard AI, cached).
-    cached = await db.insights.find_one({"slug": r["slug"]}, {"_id": 0})
-    if cached and cached.get("text"):
-        result["insight"] = cached["text"]
-    else:
-        text = await generate_insight_text(r)
-        await db.insights.update_one(
-            {"slug": r["slug"]},
-            {"$set": {"slug": r["slug"], "text": text, "updated_at": datetime.now(timezone.utc).isoformat()}},
-            upsert=True,
-        )
-        result["insight"] = text
+    result["insight"], _ = await get_or_create_insight(db, r)
 
-    await db.scans.insert_one({
-        "benchmark_slug": r["slug"], "measure": req.measure,
-        "had_image": bool(req.image_base64),
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    })
+    await db.execute(text(
+        "insert into scans(user_id,benchmark_slug,measure,had_image) "
+        "values(cast(:uid as uuid),:slug,:measure,:had_image)"
+    ), {"uid": user["id"] if user else None, "slug": r["slug"], "measure": req.measure, "had_image": bool(req.image_base64)})
+    await db.commit()
+    if user:
+        result["stats"] = await user_stats(db, user["id"])
     return result
 
 
 @api_router.get("/stats")
-async def stats():
-    plates = await db.scans.count_documents({})
-    return {"plates_recognized": 12 + plates, "streak_days": 4, "weekly_delta": 2}
+async def stats(user=Depends(optional_user), db=Depends(get_db)):
+    return {"authenticated": bool(user), **(await user_stats(db, user["id"] if user else None))}
+
+
+# ----------------------------- Account endpoints (auth required) -----------------------------
+@api_router.get("/me")
+async def me(user=Depends(require_user), db=Depends(get_db)):
+    await upsert_profile(db, user)
+    return {"user": user, "stats": await user_stats(db, user["id"]), "favorites": await favorite_slugs(db, user["id"])}
+
+
+@api_router.get("/favorites")
+async def list_favorites(user=Depends(require_user), db=Depends(get_db)):
+    slugs = await favorite_slugs(db, user["id"])
+    recs = {r["slug"]: r for r in await fetch_recipes(db, slugs=slugs)}
+    return [recipe_card(recs[s]) for s in slugs if s in recs]
+
+
+@api_router.put("/favorites/{slug}")
+async def add_favorite(slug: str, user=Depends(require_user), db=Depends(get_db)):
+    await fetch_recipe(db, slug)
+    await db.execute(text(
+        "insert into favorites(user_id,slug) values(cast(:uid as uuid),:slug) on conflict do nothing"),
+        {"uid": user["id"], "slug": slug})
+    await db.commit()
+    return {"slug": slug, "favorite": True, "favorites": await favorite_slugs(db, user["id"])}
+
+
+@api_router.delete("/favorites/{slug}")
+async def remove_favorite(slug: str, user=Depends(require_user), db=Depends(get_db)):
+    await db.execute(text("delete from favorites where user_id=cast(:uid as uuid) and slug=:slug"),
+                     {"uid": user["id"], "slug": slug})
+    await db.commit()
+    return {"slug": slug, "favorite": False, "favorites": await favorite_slugs(db, user["id"])}
 
 
 app.include_router(api_router)
@@ -278,11 +364,13 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup():
-    await db.scans.create_index("created_at")
-    await db.insights.create_index("slug", unique=True)
-    logger.info("NutriVane API ready")
+    try:
+        await init_db()
+        logger.info("NutriVane API ready (Postgres)")
+    except Exception as e:
+        logger.error(f"DB init gagal: {e}")
 
 
 @app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
+async def shutdown():
+    await engine.dispose()

@@ -1,17 +1,28 @@
 import { useEffect, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Users, Flame, Camera, Heart, Sparkles } from "lucide-react";
+import { toast } from "sonner";
 import Layout from "@/components/Layout";
 import { SpiceMeter } from "@/components/common";
 import { getRecipe, getInsight } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import { DETAIL } from "@/constants/testIds";
 
 export default function RecipeDetailPage() {
   const { slug } = useParams();
   const navigate = useNavigate();
+  const { user, isFavorite, toggleFavorite } = useAuth();
   const [r, setR] = useState(null);
   const [insight, setInsight] = useState(null);
-  const [fav, setFav] = useState(false);
+  const fav = isFavorite(slug);
+
+  const onFav = () => {
+    if (!user) {
+      toast("Masuk dulu untuk menyimpan favorit", { action: { label: "Masuk", onClick: () => navigate("/login") } });
+      return;
+    }
+    toggleFavorite(slug);
+  };
 
   useEffect(() => {
     getRecipe(slug).then(setR).catch(() => navigate("/recipes"));
@@ -31,8 +42,8 @@ export default function RecipeDetailPage() {
         <div className="nv-card overflow-hidden nv-rise">
           <div className="relative h-56">
             <img src={r.image} alt={r.name} className="w-full h-full object-cover" />
-            <button onClick={() => setFav((v) => !v)}
-              className="absolute top-3 right-3 grid place-items-center w-10 h-10 rounded-full"
+            <button onClick={onFav} data-testid={DETAIL.favBtn} aria-pressed={fav} aria-label="Simpan favorit"
+              className="absolute top-3 right-3 grid place-items-center w-10 h-10 rounded-full transition-transform active:scale-90"
               style={{ background: "rgba(255,255,255,0.9)" }}>
               <Heart size={18} color="var(--nv-accent)" fill={fav ? "var(--nv-accent)" : "none"} />
             </button>
@@ -47,7 +58,7 @@ export default function RecipeDetailPage() {
               <span className="flex items-center gap-1.5"><Users size={14} />{r.porsi} porsi</span>
               <span className="flex items-center gap-1.5"><Flame size={14} />{r.source_count} sumber resep</span>
             </div>
-            <Link to={`/scan?measure=true`} data-testid={DETAIL.scanThis} className="nv-btn-primary mt-4 w-full">
+            <Link to={`/scan?measure=true&benchmark=${r.slug}`} data-testid={DETAIL.scanThis} className="nv-btn-primary mt-4 w-full">
               <Camera size={17} /> Scan menu ini
             </Link>
           </div>

@@ -1,6 +1,7 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { Home, Camera, BookOpen, Sparkles, Leaf } from "lucide-react";
-import { NAV, HOME } from "@/constants/testIds";
+import { Home, Camera, BookOpen, Sparkles, Leaf, LogIn } from "lucide-react";
+import { NAV, HOME, AUTH } from "@/constants/testIds";
+import { useAuth } from "@/context/AuthContext";
 
 const items = [
   { to: "/", label: "Beranda", icon: Home, tid: NAV.home, end: true },
@@ -10,6 +11,7 @@ const items = [
 ];
 
 export function TopBar() {
+  const { user } = useAuth();
   return (
     <header className="nv-topbar px-5 py-3.5 flex items-center justify-between">
       <NavLink to="/" data-testid={HOME.brand} className="flex items-center gap-2">
@@ -22,8 +24,21 @@ export function TopBar() {
       </NavLink>
       <div className="flex items-center gap-2.5">
         <span className="nv-chip" style={{ fontSize: "0.64rem", letterSpacing: "0.14em" }}>BETA 2.0</span>
-        <span className="grid place-items-center w-9 h-9 rounded-full font-bold text-sm"
-          style={{ background: "var(--nv-accent-soft)", color: "var(--nv-accent)" }}>A</span>
+        {user ? (
+          <NavLink to="/profile" data-testid={AUTH.topbarAvatar} aria-label="Profil"
+            className="grid place-items-center w-9 h-9 rounded-full font-bold text-sm overflow-hidden"
+            style={{ background: "var(--nv-accent-soft)", color: "var(--nv-accent)" }}>
+            {user.avatar_url
+              ? <img src={user.avatar_url} alt={user.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              : (user.name || "?").charAt(0).toUpperCase()}
+          </NavLink>
+        ) : (
+          <NavLink to="/login" data-testid={AUTH.topbarLogin}
+            className="flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-bold text-white"
+            style={{ background: "var(--nv-green)" }}>
+            <LogIn size={14} /> Masuk
+          </NavLink>
+        )}
       </div>
     </header>
   );

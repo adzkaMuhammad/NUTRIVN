@@ -13,6 +13,9 @@ export const HOME = {
   pickCard: (s) => `home-pick-${s}`,
   seeAllMoods: "home-see-all-moods",
   seeAllPicks: "home-see-all-picks",
+  streakChip: "home-streak-chip",
+  platesCount: "home-plates-count",
+  loginBanner: "home-login-banner",
 };
 
 export const SCAN = {
@@ -21,9 +24,45 @@ export const SCAN = {
   measureToggle: "scan-measure-toggle",
   startBtn: "scan-start-btn",
   uploadInput: "scan-upload-input",
+  uploadBtn: "scan-upload-btn",
+  openCameraBtn: "scan-open-camera-btn",
+  cameraView: "scan-camera-view",
+  cameraShutterBtn: "scan-camera-shutter-btn",
+  cameraFlipBtn: "scan-camera-flip-btn",
+  cameraCloseBtn: "scan-camera-close-btn",
+  cameraError: "scan-camera-error",
+  cameraFallbackBtn: "scan-camera-fallback-btn",
+  photoPreview: "scan-photo-preview",
+  visionNote: "scan-vision-note",
+  savedNote: "scan-saved-note",
   resultCard: "scan-result-card",
   resultSpice: "scan-result-spice",
   resetBtn: "scan-reset-btn",
+};
+
+export const AUTH = {
+  page: "login-page",
+  googleBtn: "login-google-btn",
+  guestBtn: "login-guest-btn",
+  notConfigured: "login-not-configured",
+  error: "login-error",
+  callback: "auth-callback",
+  topbarLogin: "topbar-login-link",
+  topbarAvatar: "topbar-avatar-link",
+};
+
+export const PROFILE = {
+  page: "profile-page",
+  back: "profile-back",
+  name: "profile-name",
+  email: "profile-email",
+  streak: "profile-stat-streak",
+  plates: "profile-stat-plates",
+  weekly: "profile-stat-weekly",
+  favCount: "profile-fav-count",
+  favEmpty: "profile-fav-empty",
+  favCard: (s) => `profile-fav-${s}`,
+  logoutBtn: "profile-logout-btn",
 };
 
 export const RECIPES = {
@@ -35,6 +74,7 @@ export const RECIPES = {
 export const DETAIL = {
   back: "detail-back",
   scanThis: "detail-scan-this",
+  favBtn: "detail-fav-btn",
   spiceRow: (n) => `detail-spice-${n}`,
   insight: "detail-insight",
 };

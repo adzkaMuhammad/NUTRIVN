@@ -1,7 +1,14 @@
 import axios from "axios";
+import { getAccessToken } from "@/lib/supabase";
 
 const BASE = process.env.REACT_APP_BACKEND_URL;
 export const api = axios.create({ baseURL: `${BASE}/api` });
+
+api.interceptors.request.use(async (config) => {
+  const token = await getAccessToken();
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
 
 export const getHome = () => api.get("/home").then((r) => r.data);
 export const getRecipes = (params) => api.get("/recipes", { params }).then((r) => r.data);
@@ -11,3 +18,7 @@ export const getMoods = () => api.get("/moods").then((r) => r.data);
 export const getMood = (key) => api.get(`/moods/${key}`).then((r) => r.data);
 export const getInsight = (slug) => api.get(`/insight/${slug}`).then((r) => r.data);
 export const postScan = (body) => api.post("/scan", body).then((r) => r.data);
+export const getMe = () => api.get("/me").then((r) => r.data);
+export const getFavorites = () => api.get("/favorites").then((r) => r.data);
+export const addFavorite = (slug) => api.put(`/favorites/${slug}`).then((r) => r.data);
+export const removeFavorite = (slug) => api.delete(`/favorites/${slug}`).then((r) => r.data);

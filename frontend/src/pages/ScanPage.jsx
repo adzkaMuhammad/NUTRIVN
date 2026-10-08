@@ -1,27 +1,31 @@
 import { useEffect, useState, useRef } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Scan as ScanIcon, Sparkles, Info, Image as ImageIcon, RotateCcw } from "lucide-react";
+import { ArrowLeft, Scan as ScanIcon, Sparkles, Info, Camera, Upload, RotateCcw, Flame, CloudOff } from "lucide-react";
 import Layout from "@/components/Layout";
 import { SpiceMeter } from "@/components/common";
+import { CameraCapture } from "@/components/CameraCapture";
 import { getRecipes, postScan } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import { SCAN } from "@/constants/testIds";
 
 export default function ScanPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const fileRef = useRef(null);
+  const { user, setStats } = useAuth();
 
   const [benchmarks, setBenchmarks] = useState([]);
   const [selected, setSelected] = useState(null);
   const [measure, setMeasure] = useState(params.get("measure") === "true");
   const [imageB64, setImageB64] = useState(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
 
   useEffect(() => {
     getRecipes().then((rs) => {
       setBenchmarks(rs);
-      setSelected(rs[0]?.slug || null);
+      setSelected(params.get("benchmark") || rs[0]?.slug || null);
     });
   }, []);
 
@@ -40,6 +44,7 @@ export default function ScanPage() {
     try {
       const res = await postScan({ benchmark_slug: selected, measure, image_base64: imageB64 });
       setResult(res);
+      if (res.stats) setStats(res.stats);
     } catch (e) {
       console.error(e);
     } finally {
@@ -47,7 +52,7 @@ export default function ScanPage() {
     }
   };
 
-  const reset = () => { setResult(null); setImageB64(null); };
+  const reset = () => { setResult(null); setImageB64(null); setCameraOpen(false); };
 
   return (
     <Layout>
@@ -63,30 +68,48 @@ export default function ScanPage() {
             Kenali isi piringmu.
           </h1>
           <p className="mt-2 text-sm leading-relaxed" style={{ color: "var(--nv-muted)" }}>
-            Pilih benchmark menu untuk simulasi beta, lalu tentukan apakah kamu ingin mengukur bumbunya juga.
+            Ambil foto langsung dari kamera, pilih benchmark menu, lalu tentukan apakah kamu ingin mengukur bumbunya juga.
           </p>
         </div>
 
         {!result && (
           <>
-            {/* camera frame */}
-            <div className="rounded-3xl p-7 text-center text-white relative overflow-hidden nv-rise"
-              style={{ background: "linear-gradient(160deg, var(--nv-green-mid), var(--nv-green-deep))" }}>
-              <label htmlFor="scan-file" className="cursor-pointer block">
-                <span className="grid place-items-center w-16 h-16 mx-auto rounded-2xl mb-3" style={{ background: "rgba(255,255,255,0.14)" }}>
-                  {imageB64 ? <ImageIcon size={28} /> : <ScanIcon size={28} />}
-                </span>
-                <p className="font-display text-xl font-semibold">{imageB64 ? "Foto siap dianalisis" : "Arahkan ke makananmu"}</p>
-                <p className="text-sm text-white/75 mt-1.5 max-w-xs mx-auto">
-                  {imageB64 ? "Ketuk untuk ganti foto, lalu mulai scan." : "Unggah / ambil foto, atau pilih menu benchmark di bawah."}
-                </p>
-              </label>
-              <input id="scan-file" ref={fileRef} data-testid={SCAN.uploadInput} type="file"
-                accept="image/*" capture="environment" className="hidden" onChange={onFile} />
-              <span className="nv-chip mt-4" style={{ background: "rgba(255,255,255,0.14)", color: "#fff", fontSize: "0.6rem", letterSpacing: "0.14em", textTransform: "uppercase" }}>
-                Kamera beta · preview
-              </span>
-            </div>
+            {cameraOpen ? (
+              <CameraCapture
+                onCapture={(dataUrl) => { setImageB64(dataUrl); setCameraOpen(false); }}
+                onClose={() => setCameraOpen(false)}
+                onUnavailable={() => { setCameraOpen(false); fileRef.current?.click(); }}
+              />
+            ) : (
+              <div className="rounded-3xl overflow-hidden text-white relative nv-rise"
+                style={{ background: "linear-gradient(160deg, var(--nv-green-mid), var(--nv-green-deep))" }}>
+                {imageB64 ? (
+                  <img src={imageB64} alt="Foto makanan" data-testid={SCAN.photoPreview} className="w-full h-56 object-cover" />
+                ) : (
+                  <div className="pt-7 px-7 text-center">
+                    <span className="grid place-items-center w-16 h-16 mx-auto rounded-2xl mb-3" style={{ background: "rgba(255,255,255,0.14)" }}>
+                      <ScanIcon size={28} />
+                    </span>
+                    <p className="font-display text-xl font-semibold">Arahkan ke makananmu</p>
+                    <p className="text-sm text-white/75 mt-1.5 max-w-xs mx-auto">
+                      Buka kamera untuk analisis AI real-time, atau unggah foto dari galeri.
+                    </p>
+                  </div>
+                )}
+                <div className="p-4 flex gap-2.5">
+                  <button onClick={() => setCameraOpen(true)} data-testid={SCAN.openCameraBtn}
+                    className="nv-btn-accent flex-1 justify-center">
+                    <Camera size={17} /> {imageB64 ? "Foto ulang" : "Buka kamera"}
+                  </button>
+                  <button onClick={() => fileRef.current?.click()} data-testid={SCAN.uploadBtn}
+                    className="nv-btn-primary flex-1 justify-center" style={{ background: "rgba(255,255,255,0.14)" }}>
+                    <Upload size={17} /> Unggah
+                  </button>
+                </div>
+                <input id="scan-file" ref={fileRef} data-testid={SCAN.uploadInput} type="file"
+                  accept="image/*" className="hidden" onChange={onFile} />
+              </div>
+            )}
 
             {/* benchmark select */}
             <div className="nv-card p-4 nv-rise" style={{ animationDelay: "60ms" }}>
@@ -95,7 +118,7 @@ export default function ScanPage() {
                   <p className="font-bold text-sm" style={{ color: "var(--nv-green-deep)" }}>Benchmark menu</p>
                   <p className="text-xs" style={{ color: "var(--nv-muted)" }}>Dipakai sebagai pembanding beta</p>
                 </div>
-                <span className="nv-chip" style={{ fontSize: "0.62rem" }}>beta dataset</span>
+                <span className="nv-chip" style={{ fontSize: "0.62rem" }}>{benchmarks.length} menu</span>
               </div>
               <div className="grid grid-cols-1 gap-2.5">
                 {benchmarks.map((b) => (
@@ -135,7 +158,7 @@ export default function ScanPage() {
             </div>
 
             <p className="flex items-center gap-1.5 text-xs" style={{ color: "var(--nv-muted)" }}>
-              <Info size={13} /> Fitur ukur bersifat opsional. Scan tetap bisa dilakukan tanpa analisis bumbu.
+              <Info size={13} /> {user ? "Scan ini akan tersimpan di akunmu (streak & jumlah piring)." : "Masuk dengan Google agar scan tersimpan sebagai streak."}
             </p>
 
             <button onClick={runScan} disabled={loading} data-testid={SCAN.startBtn}
@@ -148,7 +171,7 @@ export default function ScanPage() {
         {result && (
           <div className="space-y-5 nv-rise" data-testid={SCAN.resultCard}>
             <div className="nv-card overflow-hidden">
-              <img src={result.image} alt={result.menu_name} className="w-full h-44 object-cover" />
+              <img src={imageB64 || result.image} alt={result.menu_name} className="w-full h-44 object-cover" />
               <div className="p-5">
                 <span className="nv-chip" style={{ fontSize: "0.62rem", textTransform: "uppercase", letterSpacing: "0.1em" }}>{result.category_label}</span>
                 <h2 className="font-display text-2xl font-semibold mt-2" style={{ color: "var(--nv-green-deep)" }}>{result.menu_name}</h2>
@@ -156,7 +179,13 @@ export default function ScanPage() {
                   <Sparkles size={16} color="var(--nv-green)" className="mt-0.5 shrink-0" />
                   <p className="text-sm leading-relaxed" style={{ color: "var(--nv-ink)" }}>{result.insight}</p>
                 </div>
-                <p className="text-xs mt-3" style={{ color: "var(--nv-muted)" }}>{result.vision_note}</p>
+                <p className="text-xs mt-3" style={{ color: "var(--nv-muted)" }} data-testid={SCAN.visionNote}>{result.vision_note}</p>
+                <p className="flex items-center gap-1.5 text-xs mt-3 font-semibold" data-testid={SCAN.savedNote}
+                  style={{ color: result.saved_to_account ? "var(--nv-green)" : "var(--nv-muted)" }}>
+                  {result.saved_to_account
+                    ? <><Flame size={13} /> Tersimpan · streak {result.stats?.streak_days} hari · {result.stats?.plates_recognized} piring</>
+                    : <><CloudOff size={13} /> Tidak tersimpan — masuk untuk menyimpan progres</>}
+                </p>
               </div>
             </div>
 
