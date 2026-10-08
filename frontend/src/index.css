@@ -1,0 +1,185 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --nv-bg: #f1f5ec;
+  --nv-surface: #ffffff;
+  --nv-green: #2f5d34;
+  --nv-green-deep: #1f3f23;
+  --nv-green-mid: #3c7342;
+  --nv-green-soft: #e3efdc;
+  --nv-green-chip: #d7e8cf;
+  --nv-accent: #e3824f;
+  --nv-accent-soft: #f6e2d4;
+  --nv-ink: #1e2a1c;
+  --nv-muted: #6d7a67;
+  --nv-line: #e4ebdd;
+}
+
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  background: var(--nv-bg);
+  color: var(--nv-ink);
+}
+
+.font-display {
+  font-family: 'Fraunces', Georgia, serif;
+  letter-spacing: -0.01em;
+}
+
+.nv-eyebrow {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--nv-muted);
+}
+
+/* shell + bottom nav */
+.nv-shell {
+  max-width: 460px;
+  margin: 0 auto;
+  min-height: 100vh;
+  background: var(--nv-bg);
+  position: relative;
+  padding-bottom: 92px;
+}
+
+.nv-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  backdrop-filter: blur(14px);
+  background: color-mix(in srgb, var(--nv-bg) 82%, transparent);
+  border-bottom: 1px solid var(--nv-line);
+}
+
+.nv-bottomnav {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 14px;
+  width: calc(100% - 32px);
+  max-width: 428px;
+  z-index: 40;
+  background: var(--nv-green-deep);
+  border-radius: 26px;
+  padding: 10px 8px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  box-shadow: 0 18px 40px -18px rgba(31, 63, 35, 0.75);
+}
+
+.nv-navitem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 0;
+  border-radius: 16px;
+  color: #b8ccb0;
+  font-size: 0.66rem;
+  font-weight: 600;
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.nv-navitem.active {
+  color: #fff;
+  background: color-mix(in srgb, var(--nv-green-mid) 65%, transparent);
+}
+
+.nv-card {
+  background: var(--nv-surface);
+  border-radius: 24px;
+  border: 1px solid var(--nv-line);
+}
+
+.nv-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  background: var(--nv-green-chip);
+  color: var(--nv-green);
+}
+
+.nv-pill-tab {
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--nv-muted);
+  background: transparent;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+.nv-pill-tab.active {
+  background: var(--nv-green);
+  color: #fff;
+}
+
+.nv-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--nv-green);
+  color: #fff;
+  font-weight: 700;
+  border-radius: 16px;
+  padding: 13px 20px;
+  transition: transform 0.15s ease, background-color 0.2s ease;
+}
+.nv-btn-primary:hover { background: var(--nv-green-deep); }
+.nv-btn-primary:active { transform: scale(0.98); }
+
+.nv-btn-accent {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--nv-accent);
+  color: #fff;
+  font-weight: 700;
+  border-radius: 16px;
+  padding: 11px 18px;
+  transition: transform 0.15s ease, filter 0.2s ease;
+}
+.nv-btn-accent:hover { filter: brightness(1.04); }
+.nv-btn-accent:active { transform: scale(0.98); }
+
+.nv-meter-track {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--nv-green-soft);
+  overflow: hidden;
+}
+.nv-meter-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--nv-green-mid);
+  transition: width 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.nv-meter-fill.top {
+  background: var(--nv-accent);
+}
+
+::-webkit-scrollbar { width: 0; height: 0; }
+
+@keyframes nvRise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.nv-rise { animation: nvRise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
