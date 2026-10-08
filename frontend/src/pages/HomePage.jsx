@@ -20,22 +20,18 @@ export default function HomePage() {
       <div className="px-5 pt-4 space-y-7">
         {/* hero */}
         <section className="nv-rise">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1">
-              <p className="nv-eyebrow mb-2">{data.date} · {data.part_of_day}</p>
-              <h1 className="font-display text-[1.75rem] leading-[1.15] font-semibold" style={{ color: "var(--nv-green-deep)" }}>
-                {data.headline}
-              </h1>
-              <p className="mt-2.5 text-sm leading-relaxed" style={{ color: "var(--nv-muted)" }}>{data.subhead}</p>
-            </div>
-            <div className="shrink-0 flex items-center gap-2 px-3 py-2 rounded-2xl" style={{ background: "var(--nv-accent-soft)" }}>
-              <Flame size={16} color="var(--nv-accent)" />
-              <div className="leading-tight">
-                <p className="text-sm font-bold" style={{ color: "var(--nv-accent)" }}>{data.streak_days} hari</p>
-                <p className="text-[0.62rem] font-semibold" style={{ color: "var(--nv-muted)" }}>streak mindful</p>
-              </div>
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <p className="nv-eyebrow">{data.date} · {data.part_of_day}</p>
+            <div className="shrink-0 flex items-center gap-2 pl-3 pr-3.5 py-1.5 rounded-full" style={{ background: "var(--nv-accent-soft)" }}>
+              <Flame size={14} color="var(--nv-accent)" />
+              <span className="text-xs font-bold" style={{ color: "var(--nv-accent)" }}>{data.streak_days} hari</span>
+              <span className="text-[0.62rem] font-semibold" style={{ color: "var(--nv-muted)" }}>streak</span>
             </div>
           </div>
+          <h1 className="font-display text-[1.75rem] leading-[1.15] font-semibold" style={{ color: "var(--nv-green-deep)" }}>
+            {data.headline}
+          </h1>
+          <p className="mt-2.5 text-sm leading-relaxed" style={{ color: "var(--nv-muted)" }}>{data.subhead}</p>
         </section>
 
         {/* feature insight */}
