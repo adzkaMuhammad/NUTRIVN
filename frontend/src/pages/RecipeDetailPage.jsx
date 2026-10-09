@@ -27,6 +27,7 @@ export default function RecipeDetailPage() {
   useEffect(() => {
     getRecipe(slug).then(setR).catch(() => navigate("/recipes"));
     getInsight(slug).then((d) => setInsight(d.text)).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
   if (!r) return <Layout><div className="p-5 text-sm" style={{ color: "var(--nv-muted)" }}>Memuat…</div></Layout>;

@@ -122,14 +122,20 @@ frontend:
       - working: "NA"
       - agent: "main"
       - comment: "USER FEEDBACK: Vercel MASIH pakai npm setelah push (commit 5fd93f9) - ternyata frontend/yarn.lock TIDAK PERNAH ter-commit (masih untracked, kemungkinan difilter karena ukuran 540KB). Fix baru: (1) buat frontend/.npmrc berisi 'legacy-peer-deps=true' agar npm path di Vercel sukses, (2) user juga disarankan set Install Command override 'yarn install' di Vercel project settings. Perlu verifikasi: npm install dengan legacy-peer-deps berhasil resolve tanpa ERESOLVE."
+      - working: "NA"
+      - agent: "main"
+      - comment: "USER FEEDBACK (commit b61eb82): npm ERESOLVE SUDAH HILANG (.npmrc berhasil), tapi build berhenti dengan error baru. ROOT CAUSE ditemukan & direproduksi lokal: Vercel set CI=true, CRA memperlakukan ESLint warning sebagai ERROR ('Treating warnings as errors because process.env.CI = true'). Ada 3 warning react-hooks/exhaustive-deps di MoodPage.jsx:19, RecipeDetailPage.jsx:30, ScanPage.jsx:30. FIX: tambah '// eslint-disable-next-line react-hooks/exhaustive-deps' di 3 lokasi (tidak mengubah perilaku runtime, effect memang sengaja run-once). VERIFIED lokal: 'CI=true yarn build' => exit 0, 'Compiled successfully'. Perlu verifikasi testing agent: serve build produksi & cek app jalan + navigasi."
       - working: true
       - agent: "testing"
       - comment: "✅ BUG FIX VERIFIED (2nd iteration). All 3 verification tests PASSED: (1) /app/frontend/.npmrc exists with correct content 'legacy-peer-deps=true', (2) CRITICAL TEST PASSED - npm install --dry-run completed successfully with exit code 0, NO ERESOLVE errors (date-fns@4.1.0 vs react-day-picker@8.10.1 peer conflict resolved), only harmless EBADENGINE warnings for @supabase packages requiring node >=22 (current v20.20.2), (3) App still functional - backend health endpoint returns {ok:true}, frontend dev server responds with 200. The .npmrc fix will make Vercel's npm build path succeed at the dependency resolution stage. stuck_count reset to 0."
+      - working: true
+      - agent: "testing"
+      - comment: "✅ BUG FIX VERIFIED (3rd iteration - FINAL). ALL 7 COMPREHENSIVE TESTS PASSED: (1) Production build folder exists at /app/frontend/build/ (4.0M, index.html + static/css + static/js), (2) Build served successfully on localhost:4567 with SPA fallback, (3) App loads without white screen or fatal JS errors, (4) Guest button works and Beranda loads with 7 recipe cards, (5) Resep page navigation works (7 recipes), (6) Recipe detail page works - 'Rendang sapi' loaded with spice meter visible (RecipeDetailPage.jsx fix verified), (7) Scan page works with measure toggle functional (ScanPage.jsx fix verified - toggled from false to true), (8) Mood page works with 4 moods and selecting mood loads 3 recipes (MoodPage.jsx fix verified), (9) Backend health endpoint returns {ok:true}. The CI=true ESLint fix is CONFIRMED WORKING - all 3 pages with eslint-disable-next-line comments (MoodPage.jsx:19, RecipeDetailPage.jsx:30, ScanPage.jsx:30) render and function correctly at runtime. BUILD IS DEPLOYMENT-READY FOR VERCEL."
 
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 2
+  test_sequence: 3
   run_ui: true
 
 test_plan:
@@ -143,6 +149,8 @@ agent_communication:
     message: "Vercel frontend build gagal dengan npm ERESOLVE (date-fns vs react-day-picker). Fix = yarn.lock + .yarnrc akan dipush ke GitHub agar Vercel pakai yarn. Mohon verifikasi: (1) folder /app/frontend/build hasil 'yarn build' bisa diserve dan halaman utama termuat tanpa error JS, (2) navigasi dasar (Beranda/Resep/Scan) berfungsi saat diserve dari build produksi, (3) tidak ada error di console browser. Backend lokal jalan di port 8001 dengan prefix /api."
   - agent: "testing"
     message: "✅ PRODUCTION BUILD VERIFICATION COMPLETE - ALL TESTS PASSED (6/6). Verified: (1) yarn.lock (540KB) and .yarnrc files exist with correct content, (2) Production build folder functional with all assets, (3) App loads without white screen, (4) No fatal JS errors, (5) Guest flow and home page work correctly, (6) Resep and Scan page navigation work. The yarn build output is fully functional and ready for Vercel deployment. When pushed to GitHub, Vercel will auto-detect yarn.lock and use yarn instead of npm, avoiding the ERESOLVE dependency conflict."
+  - agent: "testing"
+    message: "✅ 3RD ITERATION BUG FIX VERIFIED - DEPLOYMENT READY. Comprehensive testing completed on production build served at localhost:4567. All 7 tests passed including verification of the 3 ESLint fixes (MoodPage.jsx, RecipeDetailPage.jsx, ScanPage.jsx). Key findings: (1) Production build compiles successfully with CI=true (no ESLint errors), (2) All 3 fixed pages render and function correctly at runtime (MoodPage mood selection works, RecipeDetailPage spice meter displays, ScanPage measure toggle works), (3) Full user flow tested: guest login → Beranda (7 recipes) → Resep page → Recipe detail → Scan page → Mood page, (4) No white screen, no fatal JS errors, (5) Backend health endpoint working. The eslint-disable-next-line comments successfully suppress the react-hooks/exhaustive-deps warnings without affecting runtime behavior. BUILD IS READY FOR VERCEL DEPLOYMENT."
 
 user_problem_statement: "Verify NutriVane backend (FastAPI) is healthy and deployment-ready to Vercel after env changes (DATABASE_URL to Supabase Postgres, SUPABASE_JWT_MODE=jwks)"
 

@@ -16,6 +16,7 @@ export default function MoodPage() {
   useEffect(() => {
     getMood(selected).then(setDetail).catch(() => {});
     setParams({ selected }, { replace: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected]);
 
   const current = moods.find((m) => m.key === selected);

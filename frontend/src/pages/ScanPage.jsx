@@ -27,6 +27,7 @@ export default function ScanPage() {
       setBenchmarks(rs);
       setSelected(params.get("benchmark") || rs[0]?.slug || null);
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const onFile = (e) => {
