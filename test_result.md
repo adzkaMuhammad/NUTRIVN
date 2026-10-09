@@ -101,3 +101,167 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: "Verify NutriVane backend (FastAPI) is healthy and deployment-ready to Vercel after env changes (DATABASE_URL to Supabase Postgres, SUPABASE_JWT_MODE=jwks)"
+
+backend:
+  - task: "Health endpoint with Supabase Postgres connection"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "GET /api/health returns {ok: true} with 200 status. Supabase Postgres connection via pooler working correctly."
+
+  - task: "Recipes list endpoint"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "GET /api/recipes returns 7 recipes with slug, name, image, source_count fields. All data properly loaded from Supabase."
+
+  - task: "Home endpoint"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "GET /api/home returns date, part_of_day, greeting, moods list (4 items), picks list (7 items). All fields present and correct."
+
+  - task: "Recipe detail endpoint (rendang)"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "GET /api/recipes/rendang returns detail with 8 spices (with pct fields) and 5 sources. All data properly formatted."
+
+  - task: "Scan endpoint without auth"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "POST /api/scan with {benchmark_slug: rendang, measure: true} returns 200 with benchmark_slug, menu_name, spices with pct, insight, vision_note (beta mode message). Works without auth token."
+
+  - task: "Categories endpoint"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "GET /api/categories returns 7 categories with key and label fields. All data loaded correctly."
+
+  - task: "Moods endpoint"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "GET /api/moods returns 4 moods with key, label, emoji fields. All data loaded correctly."
+
+  - task: "Auth endpoint (require_user)"
+    implemented: true
+    working: true
+    file: "/app/backend/auth.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "GET /api/me without auth token correctly returns 401 Unauthorized. Auth middleware working as expected."
+
+  - task: "JWT/JWKS configuration"
+    implemented: true
+    working: true
+    file: "/app/backend/auth.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "SUPABASE_JWT_MODE=jwks configured correctly. PyJWKClient initialized with {SUPABASE_URL}/auth/v1/.well-known/jwks.json. No JWT/JWKS errors in backend logs. App starts successfully."
+
+  - task: "Database seeding"
+    implemented: true
+    working: true
+    file: "/app/backend/db.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "Database seeded successfully with 7 categories, 7 recipes, 4 moods. Logs show 'NutriVane API ready (Postgres)' on startup."
+
+  - task: "Vercel deployment config (backend)"
+    implemented: true
+    working: true
+    file: "/app/backend/vercel.json"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "Backend vercel.json correctly configured: builds server.py with @vercel/python, routes all requests to server.py. Ready for Vercel deployment."
+
+frontend:
+  - task: "Vercel deployment config (frontend)"
+    implemented: true
+    working: true
+    file: "/app/frontend/vercel.json"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "Frontend vercel.json correctly configured: SPA rewrites for all non-api routes to /index.html. Ready for Vercel deployment."
+
+metadata:
+  created_by: "testing_agent"
+  version: "1.0"
+  test_sequence: 1
+  run_ui: false
+
+test_plan:
+  current_focus: []
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+  - agent: "testing"
+    message: "Completed comprehensive backend testing. All 9 API endpoints tested and working correctly. Supabase Postgres connection healthy. JWT/JWKS configuration correct with no errors. Vercel deployment configs verified. Backend is deployment-ready."
