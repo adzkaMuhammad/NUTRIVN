@@ -102,6 +102,42 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
+user_problem_statement: "Deploy frontend NutriVane ke Vercel gagal dengan npm ERESOLVE (date-fns@4.1.0 vs react-day-picker@8.10.1 peer conflict). Fix: push yarn.lock agar Vercel memakai yarn. Backend sudah sukses deploy di https://nutrivn-peach.vercel.app"
+
+frontend:
+  - task: "Frontend production build compiles with yarn (untuk deploy Vercel)"
+    implemented: true
+    working: true
+    file: "frontend/package.json"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+      - agent: "main"
+      - comment: "Vercel build gagal karena pakai npm (yarn.lock belum terpush). yarn build lokal SUKSES 40s menghasilkan build/ folder. Perlu verifikasi hasil build produksi benar-benar jalan (serve build/ dan test halaman utama)."
+      - working: true
+      - agent: "testing"
+      - comment: "✅ ALL TESTS PASSED (6/6). Production build verified functional: (1) yarn.lock (540KB) and .yarnrc (--ignore-engines true) exist and ready for Vercel, (2) Build folder /app/frontend/build/ contains index.html + static assets, (3) Served build on localhost:4567 - app loads without white screen, (4) No fatal JS errors in browser console, (5) Guest button 'Lanjut sebagai tamu' works and home page (Beranda) loads with recipe cards, (6) Navigation to Resep page works, (7) Navigation to Scan page works. Production build is READY FOR VERCEL DEPLOYMENT with yarn."
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 2
+  run_ui: true
+
+test_plan:
+  current_focus: []
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+  - agent: "main"
+    message: "Vercel frontend build gagal dengan npm ERESOLVE (date-fns vs react-day-picker). Fix = yarn.lock + .yarnrc akan dipush ke GitHub agar Vercel pakai yarn. Mohon verifikasi: (1) folder /app/frontend/build hasil 'yarn build' bisa diserve dan halaman utama termuat tanpa error JS, (2) navigasi dasar (Beranda/Resep/Scan) berfungsi saat diserve dari build produksi, (3) tidak ada error di console browser. Backend lokal jalan di port 8001 dengan prefix /api."
+  - agent: "testing"
+    message: "✅ PRODUCTION BUILD VERIFICATION COMPLETE - ALL TESTS PASSED (6/6). Verified: (1) yarn.lock (540KB) and .yarnrc files exist with correct content, (2) Production build folder functional with all assets, (3) App loads without white screen, (4) No fatal JS errors, (5) Guest flow and home page work correctly, (6) Resep and Scan page navigation work. The yarn build output is fully functional and ready for Vercel deployment. When pushed to GitHub, Vercel will auto-detect yarn.lock and use yarn instead of npm, avoiding the ERESOLVE dependency conflict."
+
 user_problem_statement: "Verify NutriVane backend (FastAPI) is healthy and deployment-ready to Vercel after env changes (DATABASE_URL to Supabase Postgres, SUPABASE_JWT_MODE=jwks)"
 
 backend:
