@@ -119,6 +119,12 @@ frontend:
       - working: true
       - agent: "testing"
       - comment: "✅ ALL TESTS PASSED (6/6). Production build verified functional: (1) yarn.lock (540KB) and .yarnrc (--ignore-engines true) exist and ready for Vercel, (2) Build folder /app/frontend/build/ contains index.html + static assets, (3) Served build on localhost:4567 - app loads without white screen, (4) No fatal JS errors in browser console, (5) Guest button 'Lanjut sebagai tamu' works and home page (Beranda) loads with recipe cards, (6) Navigation to Resep page works, (7) Navigation to Scan page works. Production build is READY FOR VERCEL DEPLOYMENT with yarn."
+      - working: "NA"
+      - agent: "main"
+      - comment: "USER FEEDBACK: Vercel MASIH pakai npm setelah push (commit 5fd93f9) - ternyata frontend/yarn.lock TIDAK PERNAH ter-commit (masih untracked, kemungkinan difilter karena ukuran 540KB). Fix baru: (1) buat frontend/.npmrc berisi 'legacy-peer-deps=true' agar npm path di Vercel sukses, (2) user juga disarankan set Install Command override 'yarn install' di Vercel project settings. Perlu verifikasi: npm install dengan legacy-peer-deps berhasil resolve tanpa ERESOLVE."
+      - working: true
+      - agent: "testing"
+      - comment: "✅ BUG FIX VERIFIED (2nd iteration). All 3 verification tests PASSED: (1) /app/frontend/.npmrc exists with correct content 'legacy-peer-deps=true', (2) CRITICAL TEST PASSED - npm install --dry-run completed successfully with exit code 0, NO ERESOLVE errors (date-fns@4.1.0 vs react-day-picker@8.10.1 peer conflict resolved), only harmless EBADENGINE warnings for @supabase packages requiring node >=22 (current v20.20.2), (3) App still functional - backend health endpoint returns {ok:true}, frontend dev server responds with 200. The .npmrc fix will make Vercel's npm build path succeed at the dependency resolution stage. stuck_count reset to 0."
 
 metadata:
   created_by: "main_agent"
@@ -301,3 +307,5 @@ test_plan:
 agent_communication:
   - agent: "testing"
     message: "Completed comprehensive backend testing. All 9 API endpoints tested and working correctly. Supabase Postgres connection healthy. JWT/JWKS configuration correct with no errors. Vercel deployment configs verified. Backend is deployment-ready."
+  - agent: "testing"
+    message: "✅ VERCEL NPM BUILD FIX VERIFIED (2nd iteration). The .npmrc with legacy-peer-deps=true successfully resolves the ERESOLVE dependency conflict. npm install --dry-run completed with exit code 0, no ERESOLVE errors. Only harmless EBADENGINE warnings for @supabase packages. App still functional (backend health OK, frontend dev server OK). The Vercel npm build path will now succeed at dependency resolution stage. Task marked working=true, stuck_count reset to 0, needs_retesting=false."
