@@ -1,0 +1,10 @@
+# Dependencies untuk development lokal & testing (TIDAK perlu di Vercel)
+-r requirements.txt
+pytest==9.1.1
+pytest-xdist==3.8.0
+requests==2.34.2
+black==26.10.0
+flake8==7.4.1
+isort==9.0.2
+mypy==2.4.0
+pandas==3.0.6
